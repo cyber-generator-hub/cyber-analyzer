@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Analyzer</title>
+    <!-- Подключаем чистый деловой шрифт -->
+    <link href="https://googleapis.com" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f8fafc;
+            --card-bg: #ffffff;
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+            --primary: #4f46e5;
+            --primary-hover: #4338ca;
+            --border-color: #e2e8f0;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+            --success: #10b981;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-main); display: flex; flex-direction: column; align-items: center; min-height: 100vh; padding: 40px 20px; }
+        .container { width: 100%; max-width: 800px; position: relative; }
+
+        .lang-switch { position: absolute; top: -20px; right: 0; display: flex; gap: 8px; }
+        .lang-btn { background: var(--card-bg); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; font-weight: 500; transition: all 0.2s; }
+        .lang-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+
+        header { text-align: center; margin-bottom: 40px; margin-top: 20px; }
+        header h1 { font-size: 2.5rem; font-weight: 700; letter-spacing: -0.05em; margin-bottom: 10px; }
+        header p { color: var(--text-muted); font-size: 1.1rem; }
+
+        .upload-zone { background: var(--card-bg); border: 2px dashed var(--border-color); border-radius: 16px; padding: 40px; text-align: center; cursor: pointer; transition: all 0.2s ease; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
+        .upload-zone:hover, .upload-zone.dragover { border-color: var(--primary); background: #f5f3ff; }
+        .upload-icon { font-size: 48px; margin-bottom: 16px; color: var(--primary); }
+        .upload-zone h3 { font-size: 1.2rem; font-weight: 600; margin-bottom: 8px; }
+        .upload-zone p { color: var(--text-muted); font-size: 0.9rem; }
+        #fileInput { display: none; }
+
+        .loader { display: none; text-align: center; margin: 30px 0; font-weight: 500; color: var(--primary); }
+        .results-container { display: none; margin-top: 40px; }
+        
+        .report-card { background: var(--card-bg); border-radius: 16px; padding: 24px; margin-bottom: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border-left: 6px solid var(--border-color); }
+        .report-card.summary { border-left-color: var(--success); }
+        .report-card.critical { border-left-color: var(--danger); }
+        .report-card.important { border-left-color: var(--warning); }
+        .report-card h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 12px; display: flex; align-items: center; gap: 8px; }
+        .report-card ul { list-style-type: none; padding-left: 0; }
+        .report-card li { margin-bottom: 10px; position: relative; padding-left: 20px; line-height: 1.5; }
+        .report-card li::before { content: "•"; position: absolute; left: 0; font-weight: bold; font-size: 1.2rem; }
+        .report-card.critical li::before { color: var(--danger); }
+        .report-card.important li::before { color: var(--warning); }
+        .text-content { color: #334155; line-height: 1.6; }
+
+        /* Стильная деловая кнопка PDF */
+        .pdf-btn {
+            display: block;
+            width: 100%;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            padding: 16px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 24px;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2);
+        }
+        .pdf-btn:hover { background: var(--primary-hover); }
+
+        /* СТИЛИ ДЛЯ ПЕЧАТИ: Скрывают всё лишнее в PDF-файле */
+        @media print {
+            body { background: white; padding: 0; color: #000; }
+            .lang-switch, .upload-zone, .loader, .pdf-btn { display: none !important; }
+            .container { max-width: 100%; }
+            .report-card { box-shadow: none !important; border: 1px solid #cbd5e1; page-break-inside: avoid; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="lang-switch">
+            <button class="lang-btn active" onclick="setLanguage('ru')">RU</button>
+            <button class="lang-btn" onclick="setLanguage('en')">EN</button>
+        </div>
+
+        <header>
+            <h1>Cyber Analyzer</h1>
+            <p id="mainSubtitle">Проверка договоров и документов ИИ-аналитиком за 30 секунд</p>
+        </header>
+
+        <div class="upload-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+            <div class="upload-icon">📄</div>
+            <h3 id="uploadTitle">Перетащите файл сюда или нажмите для выбора</h3>
+            <p id="uploadSubtitle">Поддерживаются форматы .txt и .docx</p>
+            <input type="file" id="fileInput" accept=".txt,.docx">
+        </div>
+
+        <div class="loader" id="loader">⏳ Анализ документа...</div>
+
+        <div class="results-container" id="resultsContainer">
+            <div class="report-card summary">
+                <h2 id="cardTitleSummary">🟢 Краткое содержание документа</h2>
+                <p id="summaryText" class="text-content"></p>
+            </div>
+
+            <div class="report-card critical">
+                <h2 id="cardTitleCritical">🔴 Критические риски и опасности</h2>
+                <ul id="criticalList"></ul>
+            </div>
+
+            <div class="report-card important">
+                <h2 id="cardTitleImportant">🟡 Важные юридические нюансы</h2>
+                <ul id="importantList"></ul>
+            </div>
+
+            <button class="pdf-btn" id="pdfBtn" onclick="window.print()">📥 Скачать отчет в PDF</button>
+        </div>
+    </div>
+    <script>
+        let currentLang = 'ru';
+
+        const translations = {
+            ru: {
+                subtitle: "Проверка договоров и документов ИИ-аналитиком за 30 секунд",
+                upTitle: "Перетащите файл сюда или нажмите для выбора",
+                upSub: "Поддерживаются форматы .txt и .docx",
+                loading: "⏳ ИИ анализирует документ на предмет скрытых рисков, пожалуйста, подождите...",
+                cSum: "🟢 Краткое содержание документа",
+                cCrit: "🔴 Критические риски и опасности",
+                cImp: "🟡 Важные юридические нюансы",
+                noCrit: "Критических рисков не обнаружено.",
+                noImp: "Особых нюансов не выделено.",
+                pdfText: "📥 Скачать отчет в PDF"
+            },
+            en: {
+                subtitle: "AI document and contract analysis in 30 seconds",
+                upTitle: "Drag & drop your file here or click to browse",
+                upSub: "Supports .txt and .docx formats",
+                loading: "⏳ AI is scanning the document for hidden risks, please wait...",
+                cSum: "🟢 Executive Summary",
+                cCrit: "🔴 Critical Risks & Dangers",
+                cImp: "🟡 Key Legal Nuances",
+                noCrit: "No critical risks detected.",
+                noImp: "No specific nuances highlighted.",
+                pdfText: "📥 Download PDF Report"
+            }
+        };
+
+        function setLanguage(lang) {
+            currentLang = lang;
+            document.querySelectorAll('.lang-btn').forEach(btn => btn.classList.remove('active'));
+            if(event) event.target.classList.add('active');
+
+            document.getElementById('mainSubtitle').innerText = translations[lang].subtitle;
+            document.getElementById('uploadTitle').innerText = translations[lang].upTitle;
+            document.getElementById('uploadSubtitle').innerText = translations[lang].upSub;
+            document.getElementById('loader').innerText = translations[lang].loading;
+            document.getElementById('cardTitleSummary').innerText = translations[lang].cSum;
+            document.getElementById('cardTitleCritical').innerText = translations[lang].cCrit;
+            document.getElementById('cardTitleImportant').innerText = translations[lang].cImp;
+            document.getElementById('pdfBtn').innerText = translations[lang].pdfText;
+        }
+
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const loader = document.getElementById('loader');
+        const resultsContainer = document.getElementById('resultsContainer');
+
+        ['dragenter', 'dragover'].forEach(name => {
+            dropZone.addEventListener(name, (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        });
+        ['dragleave', 'drop'].forEach(name => {
+            dropZone.addEventListener(name, (e) => { e.preventDefault(); dropZone.classList.remove('dragover'); });
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) handleFile(files[0]);
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (fileInput.files.length > 0) handleFile(fileInput.files[0]);
+        });
+
+        function handleFile(file) {
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('lang', currentLang);
+
+            loader.style.display = 'block';
+            resultsContainer.style.display = 'none';
+
+            fetch('http://localhost:5000/api/analyze', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+            .then(data => {
+                loader.style.display = 'none';
+                displayResults(data);
+            })
+            .catch(() => {
+                loader.style.display = 'none';
+                alert(currentLang === 'ru' ? 'Ошибка анализа' : 'Analysis error');
+            });
+        }
+
+        function displayResults(data) {
+            resultsContainer.style.display = 'block';
+            document.getElementById('summaryText').innerText = data.summary || '...';
+
+            const critList = document.getElementById('criticalList');
+            critList.innerHTML = '';
+            if (data.critical_risks && data.critical_risks.length > 0) {
+                data.critical_risks.forEach(r => { const li = document.createElement('li'); li.innerText = r; critList.appendChild(li); });
+            } else {
+                critList.innerHTML = `<li>${translations[currentLang].noCrit}</li>`;
+            }
+
+            const impList = document.getElementById('importantList');
+            impList.innerHTML = '';
+            if (data.important_points && data.important_points.length > 0) {
+                data.important_points.forEach(p => { const li = document.createElement('li'); li.innerText = p; impList.appendChild(li); });
+            } else {
+                impList.innerHTML = `<li>${translations[currentLang].noImp}</li>`;
+            }
+        }
+    </script>
+</body>
+</html>
